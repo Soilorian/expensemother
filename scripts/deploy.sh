@@ -14,11 +14,13 @@ cd "$deploy_path"
 umask 077
 exec 9>.deployment.lock
 flock -w 600 9
-export APP_IMAGE="$image"
+image_env=$(mktemp)
+printf 'APP_IMAGE=%s\n' "$image" > "$image_env"
 engine=(docker)
 if ! docker info >/dev/null 2>&1; then engine=(sudo -n docker); fi
 registry_config=
 cleanup() {
+  rm -f "$image_env"
   if [[ -n "$registry_config" ]]; then rm -rf "$registry_config"; fi
   unset REGISTRY_TOKEN
 }
@@ -29,7 +31,7 @@ if [[ -n "${REGISTRY_TOKEN:-}" ]]; then
   unset REGISTRY_TOKEN
   engine+=(--config "$registry_config")
 fi
-compose=("${engine[@]}" compose --project-name expensemother --env-file .env -f "$compose_source")
+compose=("${engine[@]}" compose --project-name expensemother --env-file .env --env-file "$image_env" -f "$compose_source")
 # Validate and pull with the incoming configuration before touching the current deployment.
 "${compose[@]}" config --quiet
 "${compose[@]}" pull
