@@ -1,0 +1,12 @@
+.tools/
+.env
+.env.*
+!.env.example
+.release.env
+.previous-release.env
+*.pem
+*.key
+data/
+bin/
+coverage.out
+*.exe

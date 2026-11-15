@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: expense
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: expensemother
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expense -d expensemother"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  app:
+    build: .
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    ports:
+      - "127.0.0.1:7008:7008"
+    environment:
+      DATABASE_URL: postgres://expense:${POSTGRES_PASSWORD}@db:5432/expensemother?sslmode=disable
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CLIENT_ID: ${TELEGRAM_CLIENT_ID:-}
+      WEB_APP_URL: ${WEB_APP_URL:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    volumes:
+      - receipt_data:/data/receipts
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:
+  receipt_data:

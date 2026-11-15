@@ -1,0 +1,2454 @@
+openapi: 3.0.3
+info:
+  title: Expense Mother API
+  version: 1.1.0
+  description: 'Reviewed design contract: Telegram-first bill sharing, shared mobile web/PWA and Telegram
+    Mini App, numeric Rial amounts, Persian/English receipt OCR. Domain-driven modular monolith; no general
+    idempotency guarantees. Includes the original 17 operations with corrected schemas and functional
+    additions. See docs/technical-design.md; implementation pending.'
+servers:
+- url: http://127.0.0.1:7008
+  description: Local development
+security:
+- BearerAuth: []
+tags:
+- name: Identity
+- name: Groups
+- name: Expenses
+- name: Receipts
+paths:
+  /v1/auth/signup:
+    post:
+      operationId: signup
+      tags:
+      - Identity
+      summary: Create password account
+      description: Create password account
+      responses:
+        '200':
+          description: Create password account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '409':
+          $ref: '#/components/responses/Error409'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthUser'
+  /v1/auth/login:
+    post:
+      operationId: login
+      tags:
+      - Identity
+      summary: Sign in with password
+      description: Sign in with password
+      responses:
+        '200':
+          description: Sign in with password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '429':
+          $ref: '#/components/responses/Error429'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+  /v1/auth/profile:
+    get:
+      operationId: getProfile
+      tags:
+      - Identity
+      summary: Read current profile
+      description: Read current profile
+      responses:
+        '200':
+          description: Read current profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+  /v1/auth/telegram/challenge:
+    post:
+      operationId: createTelegramChallenge
+      tags:
+      - Identity
+      summary: Start Telegram website sign-in
+      description: Create a secret single-use five-minute challenge and nonce for Telegram Login library.
+        Also used for authenticated linking; no account is created yet.
+      responses:
+        '200':
+          description: Start Telegram website sign-in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TelegramChallengeResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '429':
+          $ref: '#/components/responses/Error429'
+      security: []
+  /v1/auth/telegram/login:
+    post:
+      operationId: loginWithTelegram
+      tags:
+      - Identity
+      summary: Exchange Telegram Login proof
+      description: Validate Telegram OIDC JWT against configured keys/algorithm, issuer, audience, expiry,
+        nonce and unexpired challenge. Map the signed profile id to the existing Bot API Telegram user
+        ID; store issuer/sub separately, never equate sub with numeric id. Consume proof once. Create
+        an account only if no Telegram identity exists. Return an application bearer token, not a provider
+        token.
+      responses:
+        '200':
+          description: Exchange Telegram Login proof
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '409':
+          $ref: '#/components/responses/Error409'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramLoginRequest'
+  /v1/auth/telegram/mini-app:
+    post:
+      operationId: loginFromMiniApp
+      tags:
+      - Identity
+      summary: Sign in from Telegram Mini App
+      description: Verify raw initData signature/freshness and signed user ID, reject replay of exchanged
+        proof, then resolve the same internal user as bot/website. No password. Authentication never grants
+        group membership automatically.
+      responses:
+        '200':
+          description: Sign in from Telegram Mini App
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthenticationHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '409':
+          $ref: '#/components/responses/Error409'
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramMiniAppRequest'
+  /v1/auth/telegram/link:
+    post:
+      operationId: linkTelegram
+      tags:
+      - Identity
+      summary: Link Telegram to the current account
+      description: Require an existing application bearer token plus fresh valid Telegram proof. Same
+        proof validation as login. Reject identity ownership conflicts with 409; never silently merge
+        two accounts.
+      responses:
+        '200':
+          description: Link Telegram to the current account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TelegramLinkRequest'
+  /v1/users:
+    get:
+      operationId: findUsers
+      tags:
+      - Identity
+      summary: Find accessible public users
+      description: Search display name/username inside shared groups; an empty term does not enumerate
+        all accounts. No contact/payment fields.
+      responses:
+        '200':
+          description: Find accessible public users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageHttpRes_UserHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/Term'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+    post:
+      operationId: createGuest
+      tags:
+      - Identity
+      summary: Create a group guest
+      description: Group administrator creates a named participant with no login. Guest claiming/merging
+        deferred.
+      responses:
+        '201':
+          description: Create a group guest
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuestUserRequest'
+  /v1/users/{userId}:
+    get:
+      operationId: getUser
+      tags:
+      - Identity
+      summary: Read an accessible user
+      description: Full self profile, public fields only for shared-group readers. Unrelated users get
+        404.
+      responses:
+        '200':
+          description: Read an accessible user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/UserId'
+    put:
+      operationId: updateUser
+      tags:
+      - Identity
+      summary: Replace editable user profile
+      description: Self only, except administrator may rename an unclaimed guest. Contact edits clear
+        verification. No identity/audit/paid flags accepted.
+      responses:
+        '200':
+          description: Replace editable user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserHttpRequest'
+  /v1/groups:
+    get:
+      operationId: findGroups
+      tags:
+      - Groups
+      summary: Find own groups
+      description: Find own groups
+      responses:
+        '200':
+          description: Find own groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageHttpRes_GroupHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/Term'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+    post:
+      operationId: createGroup
+      tags:
+      - Groups
+      summary: Create group
+      description: Create group
+      responses:
+        '201':
+          description: Create group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupHttpRequest'
+  /v1/groups/{groupId}:
+    get:
+      operationId: getGroup
+      tags:
+      - Groups
+      summary: Read group
+      description: Read group
+      responses:
+        '200':
+          description: Read group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/GroupId'
+    put:
+      operationId: updateGroup
+      tags:
+      - Groups
+      summary: Replace group details and membership
+      description: Administrator only. Preserve at least one admin and historical members. Reject currency
+        changes after a final record exists.
+      responses:
+        '200':
+          description: Replace group details and membership
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/GroupId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupHttpRequest'
+  /v1/groups/{groupId}/join:
+    post:
+      operationId: joinGroup
+      tags:
+      - Groups
+      summary: Join linked Telegram group
+      description: Resolve Telegram identity from authenticated actor and verify membership in linked
+        chat with required bot permissions. Without verifiable membership require prior application-admin
+        approval; arbitrary chat/user IDs are not proof. Already active returns current group. Unlinked
+        groups require administrator admission via group update.
+      responses:
+        '200':
+          description: Join linked Telegram group
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/GroupId'
+  /v1/groups/{groupId}/summary:
+    get:
+      operationId: getGroupSummary
+      tags:
+      - Expenses
+      summary: Read group and personal totals
+      description: Read group and personal totals
+      responses:
+        '200':
+          description: Read group and personal totals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GroupSummary'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/GroupId'
+  /v1/expenses:
+    get:
+      operationId: findExpenses
+      tags:
+      - Expenses
+      summary: List orders including drafts
+      description: Authorized data only. Defaults to drafts and finals, excluding cancelled/reversed records.
+        Stable createdAt descending, expenseId tie-break. Draft amounts are previews, never final balances.
+      responses:
+        '200':
+          description: List orders including drafts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageHttpRes_ExpenseHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - name: payerId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: groupId
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: state
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - FINAL
+        description: Omit for both drafts and finals.
+      - name: includeCancelled
+        in: query
+        schema:
+          type: boolean
+          default: false
+        description: Includes cancelled COST/INCOME and reversed TRANSFER when true.
+      - $ref: '#/components/parameters/Term'
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+    post:
+      operationId: createExpense
+      tags:
+      - Expenses
+      summary: Create draft or final expense
+      description: Create draft or final expense
+      responses:
+        '201':
+          description: Create draft or final expense
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseHttpRequest'
+            examples:
+              draftOrder:
+                summary: Incomplete order; no debt yet
+                value:
+                  groupId: 20000000-0000-4000-8000-000000000001
+                  expenseType: COST
+                  state: DRAFT
+                  displayName: Dinner order
+                  currency: Rials
+              finalCost:
+                summary: Numeric Rial total and equal split
+                value:
+                  groupId: 20000000-0000-4000-8000-000000000001
+                  expenseType: COST
+                  state: FINAL
+                  displayName: Dinner
+                  payerId: 10000000-0000-4000-8000-000000000001
+                  amount: 1200000
+                  currency: Rials
+                  paidOn: '2026-09-10T12:00:00Z'
+                  splitMode: EQUAL
+                  sharers:
+                  - userId: 10000000-0000-4000-8000-000000000001
+                  - userId: 10000000-0000-4000-8000-000000000002
+  /v1/expenses/{expenseId}:
+    get:
+      operationId: getExpense
+      tags:
+      - Expenses
+      summary: Read expense and claims
+      description: Read expense and claims
+      responses:
+        '200':
+          description: Read expense and claims
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+    put:
+      operationId: updateExpense
+      tags:
+      - Expenses
+      summary: Edit, finalize or reopen expense
+      description: 'Creator/admin only. Reopening or editing FINAL COST/INCOME requires no active payments.
+        Draft claims remain personal actions; full edits validate them. Transfers immutable: reverse and
+        recreate. Cancelled/reversed records cannot be reactivated.'
+      responses:
+        '200':
+          description: Edit, finalize or reopen expense
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExpenseHttpRequest'
+    delete:
+      operationId: cancelExpense
+      tags:
+      - Expenses
+      summary: Cancel draft or unpaid expense
+      description: Creator/admin only. Mark cancelled with actor/time. Active payments return 409. Repeated
+        cancellation is a no-op. TRANSFER uses payment reversal endpoint.
+      responses:
+        '204':
+          description: Cancel draft or unpaid expense
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+  /v1/expenses/{expenseId}/participation/me:
+    put:
+      operationId: setParticipation
+      tags:
+      - Expenses
+      summary: Join or leave a draft
+      description: Join or leave a draft
+      responses:
+        '200':
+          description: Join or leave a draft
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ParticipationRequest'
+  /v1/expenses/{expenseId}/items/{itemId}/claim/me:
+    put:
+      operationId: setItemClaim
+      tags:
+      - Expenses
+      summary: Set own draft item claim
+      description: Set own draft item claim
+      responses:
+        '200':
+          description: Set own draft item claim
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+      - $ref: '#/components/parameters/ItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ItemClaimRequest'
+  /v1/expenses/{expenseId}/payments:
+    post:
+      operationId: recordPayment
+      tags:
+      - Expenses
+      summary: Record full or partial repayment
+      description: Returns the newly created FINAL TRANSFER (expenseId is paymentId). Default debtor is
+        actor. Creditor/admin can record on behalf of an explicitly selected debtor. Infer creditor from
+        parent, check scope, lock origin, enforce amount <= remaining and commit. Omitted body pays actor
+        remaining share with current time.
+      responses:
+        '201':
+          description: Record full or partial repayment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+            examples:
+              markPaid:
+                value: {}
+              partial:
+                value:
+                  amount: 150000
+  /v1/expenses/{expenseId}/payments/{paymentId}:
+    delete:
+      operationId: reversePayment
+      tags:
+      - Expenses
+      summary: Undo recorded payment
+      description: paymentId is a linked TRANSFER expense UUID belonging to this origin. Recorder, creditor
+        or group admin may reverse; retain reversal actor/time. Repeated reversal is a no-op. Recalculate
+        from active transfers.
+      responses:
+        '204':
+          description: Undo recorded payment
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ExpenseId'
+      - $ref: '#/components/parameters/PaymentId'
+  /v1/expenses/my-debt:
+    get:
+      operationId: getMyDebt
+      tags:
+      - Expenses
+      summary: Read own outstanding obligations
+      description: Read own outstanding obligations
+      responses:
+        '200':
+          description: Read own outstanding obligations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageHttpRes_DebtHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+  /v1/expenses/my-debt/payment-info:
+    get:
+      operationId: getPaymentSuggestions
+      tags:
+      - Expenses
+      summary: Read suggested payments
+      description: Read suggested payments
+      responses:
+        '200':
+          description: Read suggested payments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageHttpRes_PaymentSuggestionHttpResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/Size'
+  /v1/receipts:
+    post:
+      operationId: uploadReceipt
+      tags:
+      - Receipts
+      summary: Upload Persian or English receipt image
+      description: Authenticated group member or private owner; maximum 10 MiB; JPEG, PNG or WebP. Validate
+        actual content. Private files are readable only by uploader until linked to an authorized expense,
+        or by group members if uploaded with groupId.
+      responses:
+        '201':
+          description: Upload Persian or English receipt image
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptResponse'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+        '413':
+          $ref: '#/components/responses/Error413'
+        '415':
+          $ref: '#/components/responses/Error415'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                groupId:
+                  type: string
+                  format: uuid
+              required:
+              - image
+              additionalProperties: false
+  /v1/receipts/{receiptId}/extract:
+    post:
+      operationId: extractReceipt
+      tags:
+      - Receipts
+      summary: Extract editable Persian and English receipt data
+      description: Owner or group-authorized member requests synchronous OCR with timeout and manual fallback.
+        Defaults to fa and en. Extraction never creates/finalizes an expense; normalize digits and flag
+        ambiguous dates/units. Keep the original image on failure.
+      responses:
+        '200':
+          description: Extract editable Persian and English receipt data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptExtraction'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ReceiptId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReceiptExtractRequest'
+  /v1/receipts/{receiptId}/image:
+    get:
+      operationId: getReceiptImage
+      tags:
+      - Receipts
+      summary: Download authorized receipt image
+      description: Download authorized receipt image
+      responses:
+        '200':
+          description: Receipt image
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          $ref: '#/components/responses/Error409'
+      parameters:
+      - $ref: '#/components/parameters/ReceiptId'
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Application access token from password or verified Telegram login. Never use a Telegram
+        provider token directly against business endpoints.
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ExpenseId:
+      name: expenseId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ItemId:
+      name: itemId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ReceiptId:
+      name: receiptId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+    Size:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    Term:
+      name: term
+      in: query
+      schema:
+        type: string
+        maxLength: 200
+  responses:
+    Error400:
+      description: Invalid fields or proof format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error401:
+      description: Missing, expired or invalid authentication/proof
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error403:
+      description: Forbidden action
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error404:
+      description: Missing or inaccessible resource
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error409:
+      description: Conflicting state or identity already linked
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error413:
+      description: Image exceeds 10 MiB
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error415:
+      description: Unsupported image format
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Error429:
+      description: Too many authentication attempts
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Money:
+      type: number
+      multipleOf: 1
+      minimum: 0
+      maximum: 9007199254740991
+      description: JSON number in whole Rials. Preserve numeric wire format; decode exactly on the server
+        and store integer Rials. No decimal-string or minor-unit conversion.
+      example: 1200000
+    SignedMoney:
+      type: number
+      multipleOf: 1
+      minimum: -9007199254740991
+      maximum: 9007199254740991
+      description: Signed whole-Rial JSON number; positive balance means receivable.
+    Currency:
+      type: string
+      minLength: 1
+      maxLength: 32
+      default: Rials
+      example: Rials
+      description: Free-form currency label; no enum or currency registry. Rials at launch. No exchange
+        conversion. Group-linked records must match the group label.
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+      required:
+      - code
+      - message
+      additionalProperties: false
+    AuthUser:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: At least 8 characters; at most 72 UTF-8 bytes.
+          writeOnly: true
+        email:
+          type: string
+          format: email
+      required:
+      - username
+      - password
+      additionalProperties: false
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+          writeOnly: true
+      required:
+      - username
+      - password
+      additionalProperties: false
+    PaymentInfo:
+      type: object
+      properties:
+        paymentInfoName:
+          type: string
+          minLength: 1
+        cardNumber:
+          type: string
+          minLength: 1
+          maxLength: 32
+        cardHolderName:
+          type: string
+          minLength: 1
+      required:
+      - paymentInfoName
+      - cardNumber
+      - cardHolderName
+      additionalProperties: false
+    PublicUserHttpResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        username:
+          type: string
+          nullable: true
+        isGuest:
+          type: boolean
+      required:
+      - userId
+      - displayName
+      - isGuest
+      additionalProperties: false
+    UserHttpResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        username:
+          type: string
+          nullable: true
+        isGuest:
+          type: boolean
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        paymentInfos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentInfo'
+        phoneVerified:
+          type: boolean
+        emailVerified:
+          type: boolean
+        hasPassword:
+          type: boolean
+        telegramLinked:
+          type: boolean
+      required:
+      - userId
+      - displayName
+      - isGuest
+      additionalProperties: false
+      description: Public fields for shared-group readers. Contact/payment and authentication fields are
+        omitted except for the owner; payment instructions may be disclosed separately to an authorized
+        debtor.
+    ProfileHttpResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        username:
+          type: string
+          nullable: true
+        isGuest:
+          type: boolean
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        paymentInfos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentInfo'
+        phoneVerified:
+          type: boolean
+        emailVerified:
+          type: boolean
+        hasPassword:
+          type: boolean
+        telegramLinked:
+          type: boolean
+      required:
+      - userId
+      - displayName
+      - username
+      - isGuest
+      - phoneNumber
+      - email
+      - paymentInfos
+      - phoneVerified
+      - emailVerified
+      - hasPassword
+      - telegramLinked
+      additionalProperties: false
+      description: Current authenticated profile; no token.
+    AuthenticationHttpResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        token:
+          type: string
+        tokenType:
+          type: string
+          enum:
+          - Bearer
+        expiresIn:
+          type: integer
+          minimum: 1
+          example: 3600
+      required:
+      - userId
+      - displayName
+      - token
+      - tokenType
+      - expiresIn
+      additionalProperties: false
+    UserHttpRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        username:
+          type: string
+          nullable: true
+          maxLength: 64
+        phoneNumber:
+          type: string
+          nullable: true
+        email:
+          type: string
+          format: email
+          nullable: true
+        paymentInfos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentInfo'
+          default: []
+      required:
+      - displayName
+      additionalProperties: false
+    GuestUserRequest:
+      type: object
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+      required:
+      - groupId
+      - displayName
+      additionalProperties: false
+      description: Administrator creates a named participant without credentials. Signup creates an authenticating
+        account.
+    TelegramChallengeResponse:
+      type: object
+      properties:
+        challengeId:
+          type: string
+        nonce:
+          type: string
+        clientId:
+          type: string
+        expiresIn:
+          type: integer
+          example: 300
+      required:
+      - challengeId
+      - nonce
+      - clientId
+      - expiresIn
+      additionalProperties: false
+      description: Random, secret challenge ID and public nonce for the Telegram Login library. Server
+        stores a single-use five-minute challenge. Keep challengeId in the initiating client; do not put
+        it in URLs.
+    TelegramLoginRequest:
+      type: object
+      properties:
+        challengeId:
+          type: string
+          minLength: 1
+        idToken:
+          type: string
+          minLength: 1
+          writeOnly: true
+      required:
+      - challengeId
+      - idToken
+      additionalProperties: false
+      description: OIDC proof from Telegram Login; validate signature, configured algorithm, issuer, audience,
+        expiry, nonce and bound challenge before consuming it.
+    TelegramMiniAppRequest:
+      type: object
+      properties:
+        initData:
+          type: string
+          minLength: 1
+          writeOnly: true
+      required:
+      - initData
+      additionalProperties: false
+      description: Raw signed Telegram.WebApp.initData. Validate signature and auth_date (five-minute
+        maximum age, small clock skew), require a user, and reject replayed exchanges. Never trust initDataUnsafe.
+    TelegramLinkRequest:
+      oneOf:
+      - $ref: '#/components/schemas/TelegramLoginRequest'
+      - $ref: '#/components/schemas/TelegramMiniAppRequest'
+      description: Authenticated existing user supplies fresh Telegram proof. Reject when already owned
+        by a different internal account; never merge by username/email.
+    UserPermission:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        isAdmin:
+          type: boolean
+          default: false
+        active:
+          type: boolean
+          default: true
+      required:
+      - userId
+      - isAdmin
+      additionalProperties: false
+    GroupHttpRequest:
+      type: object
+      properties:
+        requestUuid:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional metadata only; no idempotency guarantee.
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserPermission'
+          default: []
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        profileImageId:
+          type: string
+          format: uuid
+          nullable: true
+        currency:
+          $ref: '#/components/schemas/Currency'
+      required:
+      - displayName
+      additionalProperties: false
+      description: On create the actor is an administrator. Administrator-only replacement on update,
+        with users required at service level for PUT. Preserve at least one active administrator and historical
+        membership. Currency defaults to Rials on create, is preserved when omitted on update, and cannot
+        change after any final entry exists.
+    GroupHttpResponse:
+      type: object
+      properties:
+        requestUuid:
+          type: string
+          format: uuid
+          nullable: true
+          description: Optional metadata only; no idempotency guarantee.
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserPermission'
+          default: []
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+        profileImageId:
+          type: string
+          format: uuid
+          nullable: true
+        currency:
+          $ref: '#/components/schemas/Currency'
+        groupId:
+          type: string
+          format: uuid
+      required:
+      - groupId
+      - displayName
+      - currency
+      - users
+      additionalProperties: false
+    UpdatableAuditInfo:
+      type: object
+      properties:
+        createdByUserId:
+          type: string
+          format: uuid
+        createdByUsername:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedByUserId:
+          type: string
+          format: uuid
+        updatedByUsername:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+      required:
+      - createdByUserId
+      - createdAt
+      - updatedByUserId
+      - updatedAt
+      additionalProperties: false
+      description: Server-owned audit metadata.
+    Sharer:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        share:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          default: 1
+      required:
+      - userId
+      additionalProperties: false
+      description: Unique participant. share is a weight in WEIGHT mode, defaults to one; ignored in EQUAL/ITEM
+        modes. Payment state is not writable.
+    SharerHttpResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        share:
+          type: number
+          exclusiveMinimum: true
+          minimum: 0
+          default: 1
+        userDisplayName:
+          type: string
+        shareAmount:
+          $ref: '#/components/schemas/Money'
+        paidAmount:
+          $ref: '#/components/schemas/Money'
+        remainingAmount:
+          $ref: '#/components/schemas/Money'
+        isPayed:
+          type: boolean
+          deprecated: true
+          description: 'Derived compatibility field for COST: no remaining payment. Self-funded COST share
+            is already satisfied; use explicit debt direction for INCOME.'
+      required:
+      - userId
+      - shareAmount
+      - paidAmount
+      - remainingAmount
+      additionalProperties: false
+    ItemClaim:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        weight:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          default: 1
+      required:
+      - userId
+      additionalProperties: false
+      description: For QUANTITY items quantity is required. For SHARED items weight defaults to one and
+        quantity must be absent. A user has at most one claim per item.
+    ExpenseItem:
+      type: object
+      properties:
+        itemId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          minLength: 1
+        quantity:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          default: 1
+        lineAmount:
+          $ref: '#/components/schemas/Money'
+        allocationMode:
+          type: string
+          enum:
+          - QUANTITY
+          - SHARED
+          default: QUANTITY
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemClaim'
+          default: []
+      required:
+      - itemId
+      - displayName
+      - quantity
+      - lineAmount
+      - allocationMode
+      - claims
+      additionalProperties: false
+      description: Client-generated stable item UUID. QUANTITY splits by claimed quantities summing to
+        purchased quantity on finalization; SHARED divides the complete line by positive claim weights.
+        Unassigned lines allowed only in DRAFT.
+    ExpenseAdjustment:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+          - TAX
+          - FEE
+          - DISCOUNT
+        displayName:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Money'
+        allocations:
+          type: array
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+                format: uuid
+              amount:
+                $ref: '#/components/schemas/Money'
+            required:
+            - userId
+            - amount
+            additionalProperties: false
+      required:
+      - kind
+      - amount
+      additionalProperties: false
+      description: Amount is a nonnegative magnitude; DISCOUNT subtracts. Omitted allocations use proportional
+        item subtotals (equal for zero subtotals). Explicit allocations must sum exactly to adjustment
+        amount. Shares must remain nonnegative.
+    ExpenseHttpRequest:
+      type: object
+      properties:
+        expenseId:
+          type: string
+          format: uuid
+        payerId:
+          type: string
+          format: uuid
+          nullable: true
+        receiverId:
+          type: string
+          format: uuid
+          nullable: true
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        expenseType:
+          type: string
+          enum:
+          - COST
+          - INCOME
+          - TRANSFER
+        imageIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          default: []
+          description: Receipt IDs authorized for this scope.
+        displayName:
+          type: string
+          nullable: true
+          maxLength: 200
+        sharers:
+          type: array
+          items:
+            $ref: '#/components/schemas/Sharer'
+          default: []
+        parentExpenseId:
+          type: string
+          format: uuid
+          nullable: true
+        state:
+          type: string
+          enum:
+          - DRAFT
+          - FINAL
+          default: DRAFT
+        amount:
+          $ref: '#/components/schemas/Money'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        paidOn:
+          type: string
+          format: date-time
+          nullable: true
+        splitMode:
+          type: string
+          enum:
+          - EQUAL
+          - WEIGHT
+          - ITEM
+          default: EQUAL
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseItem'
+          default: []
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseAdjustment'
+          default: []
+      required:
+      - expenseType
+      - state
+      additionalProperties: false
+      description: 'DRAFT may omit payer/receiver, amount, title and date; validate any supplied references.
+        FINAL COST requires positive amount, payer, no receiver, nonempty sharers and paidOn. FINAL INCOME
+        requires receiver, no payer, positive amount, nonempty sharers and paidOn. FINAL TRANSFER requires
+        distinct payer/receiver, positive amount, paidOn and a final COST/INCOME parent in the same group/currency;
+        no sharers/items/adjustments/images. Parent is forbidden for COST/INCOME. Group currency is inherited;
+        ungrouped create defaults to Rials. ITEM mode is COST-only, participant claims must belong to
+        sharers, and items plus adjustments must equal amount. Non-ITEM modes forbid items/adjustments.
+        Finalization requires full allocation. Existing transfers cannot be edited by PUT: reverse and
+        recreate through payment actions. Creator/admin may reopen FINAL COST/INCOME only without active
+        repayments. IDs in body must match path on PUT. Cancellation is server-owned. General PUT replaces
+        editable fields; omitted optional lists clear, state/type remain required. DRAFT is supported
+        for COST/INCOME only; repayment TRANSFER is always created FINAL.'
+      oneOf:
+      - properties:
+          state:
+            enum:
+            - DRAFT
+          expenseType:
+            enum:
+            - COST
+            - INCOME
+      - required:
+        - amount
+        - paidOn
+        - payerId
+        - sharers
+        properties:
+          state:
+            enum:
+            - FINAL
+          expenseType:
+            enum:
+            - COST
+          amount:
+            type: number
+            minimum: 1
+          paidOn:
+            type: string
+            format: date-time
+          payerId:
+            type: string
+            format: uuid
+          sharers:
+            type: array
+            minItems: 1
+      - required:
+        - amount
+        - paidOn
+        - receiverId
+        - sharers
+        properties:
+          state:
+            enum:
+            - FINAL
+          expenseType:
+            enum:
+            - INCOME
+          amount:
+            type: number
+            minimum: 1
+          paidOn:
+            type: string
+            format: date-time
+          receiverId:
+            type: string
+            format: uuid
+          sharers:
+            type: array
+            minItems: 1
+      - required:
+        - amount
+        - paidOn
+        - payerId
+        - receiverId
+        - parentExpenseId
+        properties:
+          state:
+            enum:
+            - FINAL
+          expenseType:
+            enum:
+            - TRANSFER
+          amount:
+            type: number
+            minimum: 1
+          paidOn:
+            type: string
+            format: date-time
+          payerId:
+            type: string
+            format: uuid
+          receiverId:
+            type: string
+            format: uuid
+          parentExpenseId:
+            type: string
+            format: uuid
+          sharers:
+            type: array
+            maxItems: 0
+          items:
+            type: array
+            maxItems: 0
+          adjustments:
+            type: array
+            maxItems: 0
+    ExpenseHttpResponse:
+      type: object
+      properties:
+        expenseId:
+          type: string
+          format: uuid
+        payerId:
+          type: string
+          format: uuid
+          nullable: true
+        receiverId:
+          type: string
+          format: uuid
+          nullable: true
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        expenseType:
+          type: string
+          enum:
+          - COST
+          - INCOME
+          - TRANSFER
+        imageIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          default: []
+          description: Receipt IDs authorized for this scope.
+        displayName:
+          type: string
+          nullable: true
+          maxLength: 200
+        sharers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SharerHttpResponse'
+        parentExpenseId:
+          type: string
+          format: uuid
+          nullable: true
+        state:
+          type: string
+          enum:
+          - DRAFT
+          - FINAL
+          default: DRAFT
+        amount:
+          $ref: '#/components/schemas/Money'
+        currency:
+          $ref: '#/components/schemas/Currency'
+        paidOn:
+          type: string
+          format: date-time
+          nullable: true
+        splitMode:
+          type: string
+          enum:
+          - EQUAL
+          - WEIGHT
+          - ITEM
+          default: EQUAL
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseItem'
+          default: []
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseAdjustment'
+          default: []
+        auditInfo:
+          $ref: '#/components/schemas/UpdatableAuditInfo'
+        cancelledAt:
+          type: string
+          format: date-time
+          nullable: true
+        cancelledByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        reversedAt:
+          type: string
+          format: date-time
+          nullable: true
+        reversedByUserId:
+          type: string
+          format: uuid
+          nullable: true
+        payerDisplayName:
+          type: string
+          nullable: true
+        receiverDisplayName:
+          type: string
+          nullable: true
+        groupDisplayName:
+          type: string
+          nullable: true
+        parentExpenseDisplayName:
+          type: string
+          nullable: true
+      required:
+      - expenseId
+      - expenseType
+      - state
+      - currency
+      - sharers
+      - imageIds
+      - items
+      - adjustments
+      - auditInfo
+      additionalProperties: false
+      description: Amount and payer may be absent on incomplete drafts. Cancelled/reversed records remain
+        readable to authorized users but do not affect totals. Transfers use reversedAt; COST/INCOME use
+        cancelledAt.
+    ParticipationRequest:
+      type: object
+      properties:
+        participating:
+          type: boolean
+        share:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          default: 1
+      required:
+      - participating
+      additionalProperties: false
+      description: Draft-only desired self-participation. Leaving also removes own item claims. Reject
+        changes to final/cancelled expenses.
+    ItemClaimRequest:
+      type: object
+      properties:
+        quantity:
+          type: number
+          minimum: 0
+        weight:
+          type: number
+          minimum: 0
+      additionalProperties: false
+      description: 'Exactly one field: quantity for QUANTITY mode, weight for SHARED mode. Zero removes
+        own claim. Requires draft participation; reject overclaiming. Domain enforces the item mode.'
+      oneOf:
+      - required:
+        - quantity
+        not:
+          required:
+          - weight
+      - required:
+        - weight
+        not:
+          required:
+          - quantity
+    PaymentRequest:
+      type: object
+      properties:
+        creditorId:
+          type: string
+          format: uuid
+          description: Select the beneficiary when an INCOME expense has multiple creditors; otherwise inferred.
+        debtorId:
+          type: string
+          format: uuid
+          description: Default caller. Creditor/admin may record on behalf of this debtor.
+        amount:
+          $ref: '#/components/schemas/Money'
+        paidOn:
+          type: string
+          format: date-time
+        displayName:
+          type: string
+          nullable: true
+      additionalProperties: false
+      description: Omit amount to pay the selected debtor remaining share in full; explicit amount must
+        be positive and not exceed it. Omit paidOn to use server time. Direction/currency inferred
+        from parent and debtor, including INCOME. Zero remaining returns 409. Creates one FINAL TRANSFER
+        under the locked origin expense.
+    DebtHttpResponse:
+      type: object
+      properties:
+        expenseId:
+          type: string
+          format: uuid
+        expenseName:
+          type: string
+          nullable: true
+        expenseAmount:
+          $ref: '#/components/schemas/Money'
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        groupName:
+          type: string
+          nullable: true
+        groupImageId:
+          type: string
+          format: uuid
+          nullable: true
+        payerId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Original expense payer; not necessarily creditor for INCOME.
+        payerName:
+          type: string
+          nullable: true
+        payerPaymentMethod:
+          $ref: '#/components/schemas/PaymentInfo'
+        payerProfileImageId:
+          type: string
+          format: uuid
+          nullable: true
+        creditorId:
+          type: string
+          format: uuid
+        creditorName:
+          type: string
+        debtorId:
+          type: string
+          format: uuid
+        shareAmount:
+          $ref: '#/components/schemas/Money'
+        paidAmount:
+          $ref: '#/components/schemas/Money'
+        remainingAmount:
+          $ref: '#/components/schemas/Money'
+        currency:
+          $ref: '#/components/schemas/Currency'
+      required:
+      - expenseId
+      - expenseAmount
+      - creditorId
+      - creditorName
+      - debtorId
+      - shareAmount
+      - paidAmount
+      - remainingAmount
+      - currency
+      additionalProperties: false
+      description: One remaining obligation for the caller. Payment instructions only when explicitly
+        authorized; omit from default results.
+    PaymentSuggestionHttpResponse:
+      type: object
+      properties:
+        payeeId:
+          type: string
+          format: uuid
+        payeeName:
+          type: string
+        payerId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        currency:
+          $ref: '#/components/schemas/Currency'
+        expenses:
+          type: array
+          items:
+            type: object
+            properties:
+              expenseId:
+                type: string
+                format: uuid
+              amount:
+                $ref: '#/components/schemas/Money'
+            required:
+            - expenseId
+            - amount
+            additionalProperties: false
+      required:
+      - payeeId
+      - payeeName
+      - payerId
+      - amount
+      - currency
+      - expenses
+      additionalProperties: false
+      description: Read-only total and ordered origin allocations; grouped by creditor/group/currency.
+        UI records each selected origin via payments endpoint and refreshes after partial success. No
+        atomic pay-all endpoint or opposite-debt netting initially.
+    MemberBalance:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        balance:
+          $ref: '#/components/schemas/SignedMoney'
+        amountOwed:
+          $ref: '#/components/schemas/Money'
+        amountReceivable:
+          $ref: '#/components/schemas/Money'
+      required:
+      - userId
+      - displayName
+      - balance
+      - amountOwed
+      - amountReceivable
+      additionalProperties: false
+    GroupSummary:
+      type: object
+      properties:
+        groupId:
+          type: string
+          format: uuid
+        currency:
+          $ref: '#/components/schemas/Currency'
+        totalSpending:
+          $ref: '#/components/schemas/Money'
+        draftCount:
+          type: integer
+          minimum: 0
+        draftPreviewAmount:
+          $ref: '#/components/schemas/Money'
+        mySpending:
+          $ref: '#/components/schemas/Money'
+        myPaymentsMade:
+          $ref: '#/components/schemas/Money'
+        myAmountOwed:
+          $ref: '#/components/schemas/Money'
+        myAmountReceivable:
+          $ref: '#/components/schemas/Money'
+        myBalance:
+          $ref: '#/components/schemas/SignedMoney'
+        members:
+          type: array
+          items:
+            $ref: '#/components/schemas/MemberBalance'
+      required:
+      - groupId
+      - currency
+      - totalSpending
+      - draftCount
+      - draftPreviewAmount
+      - mySpending
+      - myPaymentsMade
+      - myAmountOwed
+      - myAmountReceivable
+      - myBalance
+      - members
+      additionalProperties: false
+      description: Final noncancelled COST totals only for spending; INCOME/TRANSFER affect balances with
+        correct sign. Draft preview sums known COST draft amounts separately (incomplete drafts can lack
+        amount). Historical members get only their entitled past records and personal totals, not a current
+        full-group summary.
+    ReceiptResponse:
+      type: object
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+        groupId:
+          type: string
+          format: uuid
+          nullable: true
+        expenseId:
+          type: string
+          format: uuid
+          nullable: true
+        uploadedByUserId:
+          type: string
+          format: uuid
+        contentType:
+          type: string
+          enum:
+          - image/jpeg
+          - image/png
+          - image/webp
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - receiptId
+      - uploadedByUserId
+      - contentType
+      - createdAt
+      additionalProperties: false
+    ReceiptExtractRequest:
+      type: object
+      properties:
+        languages:
+          type: array
+          items:
+            type: string
+            enum:
+            - fa
+            - en
+          minItems: 1
+          uniqueItems: true
+          default:
+          - fa
+          - en
+      additionalProperties: false
+    ReceiptExtraction:
+      type: object
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - SUCCESS
+          - PARTIAL
+          - FAILED
+        merchant:
+          type: string
+          nullable: true
+        paidOn:
+          type: string
+          format: date-time
+          nullable: true
+        currency:
+          $ref: '#/components/schemas/Currency'
+        detectedUnit:
+          type: string
+          nullable: true
+          description: OCR text unit such as Rial or Toman; not an automatic conversion instruction.
+        amount:
+          $ref: '#/components/schemas/Money'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseItem'
+        adjustments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseAdjustment'
+        warnings:
+          type: array
+          items:
+            type: string
+        rawText:
+          type: string
+          nullable: true
+      required:
+      - receiptId
+      - status
+      - currency
+      - items
+      - adjustments
+      - warnings
+      additionalProperties: false
+      description: Editable suggestions only; missing amount/date is allowed. Items are unclaimed. Normalize
+        Persian/Arabic/Latin digits; preserve source text and flag ambiguous numbers/units. If source
+        says Toman require user confirmation of Rial conversion before saving. Never auto-finalize. Timeout/provider
+        extraction failure returns FAILED with warnings and manual entry available.
+    PageHttpRes_UserHttpResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        elements:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicUserHttpResponse'
+      required:
+      - page
+      - size
+      - totalElements
+      - totalPages
+      - elements
+      additionalProperties: false
+    PageHttpRes_GroupHttpResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        elements:
+          type: array
+          items:
+            $ref: '#/components/schemas/GroupHttpResponse'
+      required:
+      - page
+      - size
+      - totalElements
+      - totalPages
+      - elements
+      additionalProperties: false
+    PageHttpRes_ExpenseHttpResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        elements:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExpenseHttpResponse'
+      required:
+      - page
+      - size
+      - totalElements
+      - totalPages
+      - elements
+      additionalProperties: false
+    PageHttpRes_DebtHttpResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        elements:
+          type: array
+          items:
+            $ref: '#/components/schemas/DebtHttpResponse'
+      required:
+      - page
+      - size
+      - totalElements
+      - totalPages
+      - elements
+      additionalProperties: false
+    PageHttpRes_PaymentSuggestionHttpResponse:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        elements:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentSuggestionHttpResponse'
+      required:
+      - page
+      - size
+      - totalElements
+      - totalPages
+      - elements
+      additionalProperties: false

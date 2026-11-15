@@ -1,0 +1,45 @@
+# API and Telegram polling run together in app. Keep exactly one app instance.
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: expense
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: expensemother
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expense -d expensemother"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  app:
+    image: ${APP_IMAGE:?Set APP_IMAGE to the published image digest}
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 20s
+    ports:
+      - "127.0.0.1:${HTTP_PORT:-7008}:7008"
+    environment:
+      HTTP_ADDR: :7008
+      RECEIPT_DIR: /data/receipts
+      DATABASE_URL: postgres://expense:${POSTGRES_PASSWORD}@db:5432/expensemother?sslmode=disable
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CLIENT_ID: ${TELEGRAM_CLIENT_ID:-}
+      WEB_APP_URL: ${WEB_APP_URL:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    volumes:
+      - receipt_data:/data/receipts
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+volumes:
+  postgres_data:
+  receipt_data:
