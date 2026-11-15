@@ -12,11 +12,27 @@ compose_source=$(realpath -- "$compose_source")
 test -f "$deploy_path/.env" || { echo 'Provision the server .env before deploying.' >&2; exit 1; }
 cd "$deploy_path"
 umask 077
+exec 9>.deployment.lock
+flock -w 600 9
 export APP_IMAGE="$image"
-compose=(docker compose --project-name expensemother --env-file .env -f "$compose_source")
+engine=(docker)
+if ! docker info >/dev/null 2>&1; then engine=(sudo -n docker); fi
+registry_config=
+cleanup() {
+  if [[ -n "$registry_config" ]]; then rm -rf "$registry_config"; fi
+  unset REGISTRY_TOKEN
+}
+trap cleanup EXIT
+if [[ -n "${REGISTRY_TOKEN:-}" ]]; then
+  registry_config=$(mktemp -d)
+  printf '%s' "$REGISTRY_TOKEN" | docker --config "$registry_config" login ghcr.io --username "${4:?Registry username required}" --password-stdin
+  unset REGISTRY_TOKEN
+  engine+=(--config "$registry_config")
+fi
+compose=("${engine[@]}" compose --project-name expensemother --env-file .env -f "$compose_source")
 # Validate and pull with the incoming configuration before touching the current deployment.
-docker compose --project-name expensemother --env-file .env -f "$compose_source" config --quiet
-docker compose --project-name expensemother --env-file .env -f "$compose_source" pull
+"${compose[@]}" config --quiet
+"${compose[@]}" pull
 # Stop the old poller before starting its replacement. Keep all persisted volumes.
 "${compose[@]}" stop app
 if ! "${compose[@]}" up -d --wait --wait-timeout 180; then

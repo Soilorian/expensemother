@@ -104,6 +104,9 @@ jobs:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
     environment: production
     concurrency:
       group: expensemother-production
@@ -134,11 +137,14 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
       - name: Deploy backend, Telegram bot and PostgreSQL
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           remote="$DEPLOY_USER@$DEPLOY_HOST"
           incoming="/tmp/expensemother-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           opts=(-o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=15)
           ssh "${opts[@]}" -p "$DEPLOY_PORT" "$remote" "umask 077; mkdir '$incoming'"
           scp "${opts[@]}" -P "$DEPLOY_PORT" scripts/deploy.sh compose.production.yaml "$remote:$incoming/"
-          ssh "${opts[@]}" -p "$DEPLOY_PORT" "$remote" "bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$APP_IMAGE' '$incoming/compose.production.yaml'"
+          printf '%s\n' "$REGISTRY_TOKEN" |
+            ssh "${opts[@]}" -p "$DEPLOY_PORT" "$remote" "read -r REGISTRY_TOKEN; export REGISTRY_TOKEN; bash '$incoming/deploy.sh' '$DEPLOY_PATH' '$APP_IMAGE' '$incoming/compose.production.yaml' '$GITHUB_REPOSITORY_OWNER'"
           echo "Deployed \`$APP_IMAGE\`" >> "$GITHUB_STEP_SUMMARY"

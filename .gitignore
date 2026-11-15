@@ -10,3 +10,6 @@ data/
 bin/
 coverage.out
 *.exe
+
+.deployment.lock
+compose.previous.yaml

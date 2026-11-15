@@ -1,6 +1,6 @@
 # GitHub CI/CD and Docker deployment
 
-GitHub repository: [Soilorian/expensemother](https://github.com/Soilorian/expensemother). Deployment host details and secrets will be supplied later; server deployment remains disabled until configured.
+GitHub repository: [Soilorian/expensemother](https://github.com/Soilorian/expensemother). Deployment is connected to `mahdi@20.11.16.11` at `/home/mahdi/expensemother`. Pushes to `main` deploy automatically after tests and production-stack smoke checks pass.
 
 ## What runs
 
@@ -25,7 +25,7 @@ The supplied deployment targets a Linux AMD64 server with Bash, SSH, Docker Engi
 
 Create that directory and a mode-600 `.env` file there. Use the keys in the root `.env.example`: at minimum a strong URL-safe `POSTGRES_PASSWORD`, random `AUTH_SECRET` of at least 32 bytes, and the real `TELEGRAM_BOT_TOKEN` to enable polling. Add browser settings when needed. Compose sets the internal database address; `DATABASE_URL` from the example is only for native local runs. Never commit the populated `.env`.
 
-For a private image, run `docker login ghcr.io` as the deployment user once, using a credential authorized to read that package (`read:packages`, with organization SSO authorization if required). Provision it on the host through your secret-management process. Public images can be pulled without login. CI does not send its temporary registry token to the host.
+The workflow passes its short-lived, package-read `GITHUB_TOKEN` to the host through SSH standard input. The deployment script uses an isolated Docker credential directory and removes it on exit; no permanent registry token is required. Docker runs through passwordless sudo when the deployment user cannot access the daemon directly. A host lock prevents overlapping deployments.
 
 The API binds to `127.0.0.1:7008`; put your HTTPS reverse proxy in front of it for remote API/web clients. PostgreSQL has no host port in production. Telegram long polling needs outbound HTTPS and no incoming webhook port. `HTTP_PORT` can change the host API port.
 
@@ -75,3 +75,13 @@ The supplied server deployment starts a fresh stack. If migrating an existing lo
 Local checks passed: actionlint workflow validation, both Compose configurations, shell/Python syntax, and mocked deployment scenarios for missing configuration, failed pulls, stop/start ordering, saved releases and failed startup. Full image startup, Linux race tests and SSH deployment run in GitHub/server environments; they have not yet run on your account. The local Docker engine was unavailable during preparation.
 
 The workflow follows [GitHub's container publishing instructions](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images?learn=continuous_deployment) and uses [Compose readiness waiting](https://docs.docker.com/reference/cli/docker/compose/up/). Go CI and the Docker build both select version 1.27.1 from the [official Go release feed](https://go.dev/dl/?mode=json).
+
+## This server
+
+The API listens on `127.0.0.1:7008`. PostgreSQL is private to the Compose network. The service's secrets live in `/home/mahdi/expensemother/.env`, mode 600. Database and receipt volumes are separate from the personal website's data.
+
+Planned public API hostname: `expensemother.mahdialinejad.me`, pointing to `20.11.16.11`. Add its DNS A record before enabling the Caddy site. Telegram long polling works without a public hostname and needs no webhook or extra inbound port.
+
+To enable the bot, populate `TELEGRAM_BOT_TOKEN` in the server `.env`, then recreate the app using both `.env` and `.release.env`. The initial configuration leaves Telegram disabled until the real token is supplied. Do not share the token in chat or commit it. Before moving a bot that already runs elsewhere, stop the previous polling instance and remove any configured webhook. Add it as a group administrator and run `/setup`; members then use `/join`.
+
+`TELEGRAM_CLIENT_ID`, `ALLOWED_ORIGINS`, and `WEB_APP_URL` are optional settings for a future browser/Mini App client; they are not necessary for the Telegram group bot. No web frontend is included in this repository.
