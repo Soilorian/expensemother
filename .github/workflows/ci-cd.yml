@@ -43,6 +43,8 @@ jobs:
       - run: go mod download && go mod verify
       - run: go vet ./...
       - run: go test -race -count=1 ./...
+      - name: Verify concurrent database operations repeatedly
+        run: go test -race -count=5 ./internal/adapters/postgres
       - name: Check deployment scripts
         run: |
           bash -n scripts/deploy.sh scripts/ci-compose-smoke.sh

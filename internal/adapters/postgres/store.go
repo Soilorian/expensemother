@@ -50,7 +50,7 @@ func (s *Store) Migrate(ctx context.Context) error {
 	return tx.Commit(ctx)
 }
 func (s *Store) Within(ctx context.Context, fn func(app.Repository) error) error {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 6; i++ {
 		tx, e := s.Pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.Serializable})
 		if e != nil {
 			return e
@@ -67,6 +67,14 @@ func (s *Store) Within(ctx context.Context, fn func(app.Repository) error) error
 		var pe *pgconn.PgError
 		if errors.As(e, &pe) {
 			if pe.Code == "40001" || pe.Code == "40P01" || pe.Code == "23505" {
+				// Let the winning transaction finish before taking a new snapshot.
+				timer := time.NewTimer(time.Duration(1<<i) * 10 * time.Millisecond)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return ctx.Err()
+				case <-timer.C:
+				}
 				continue
 			}
 			if pe.Code == "23503" {
